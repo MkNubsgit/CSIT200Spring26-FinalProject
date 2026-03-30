@@ -1,7 +1,7 @@
 ## FINAL PROJECT - PAINT CSIT200
 
 ## reference imports:
-for gui container: tkinter - misha will complete
+for gui container: PyQt6 - misha will complete
     - create mouse detection, debating whether to use local detection or provide raw coordinate data, tba
     - create tray to hold brush modules created
     - STRETCH : create undo button , dependent on mouse click duration being tracked in order to identify strokes, for last held duration, make all points on stroke transparent
