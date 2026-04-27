@@ -27,18 +27,18 @@ Structure:
 
 -- Main * 
     # (you know what this does)
--- SliderControl *  
-    # Sliders + spinboxes.
--- RotationControl * 
-    # Dial and degree input for rotation (implemented but not used as of yet)
--- Canvas * 
-    # Most important module by far, handles all our drawing logic and buffer for image.
--- MainWindow * 
-    # Holds the other components in our PyQt6 GUI
+    -- SliderControl *  
+        # Sliders + spinboxes.
+    -- RotationControl * 
+        # Dial and degree input for rotation (implemented but not used as of yet)
+    -- Canvas * 
+        # Most important module by far, handles all our drawing logic and buffer for image.
+    -- MainWindow * 
+        # Holds the other components in our PyQt6 GUI
 
 _________________________________________________________________________________________________
 
-STRETCH GOALS THAT I HAVE *****NOT ****** IMPLEMENTED AS OF YET WINK WINK GROUP
+STRETCH GOALS THAT I HAVE *****NOT ****** IMPLEMENTED AS OF YET WINK WINK GROUP 
 
 Undo/redo system
 Zoom/pan on canvas
@@ -46,6 +46,7 @@ Brush Shapes
 Layer Support
 Selection tools
 
+Powerpoint :p
 _________________________________________________________________________________________________
 
 Additional Info:
