@@ -10,6 +10,7 @@ from PyQt6.QtGui import QPainter, QPen, QColor, QImage, QFont
 
 
 ## SLIDER CONTROL
+"""We use this for opacity and size sliders."""
 class SliderControl(QWidget):
     def __init__(self, label, tooltip="", min_val=0, max_val=100):
         super().__init__()
@@ -39,6 +40,7 @@ class SliderControl(QWidget):
 
 
 ## ROTATION CONTROL
+""" Would be used for rotation widget but it is not implemented currently"""
 class RotationControl(QWidget):
     def __init__(self):
         super().__init__()
@@ -61,6 +63,7 @@ class RotationControl(QWidget):
 
 
 ## CANVAS
+"""Canvas is set to minimum size as declared below. Sets brush size, opacity, color, tool to detault and clears when making new. Implements save/load as well."""
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
@@ -103,6 +106,9 @@ class Canvas(QWidget):
             self._image = img
             self.update()
 
+    """The way we make our canvas update is by tracking when the left mouse button is held or not held. When MouseLeft is clicked, 
+    we make the self.__drawing method true, which then checks the position of the mouse cursor
+    and draws objects continuously until the left mouse button is released."""
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             self._drawing = True
@@ -117,7 +123,8 @@ class Canvas(QWidget):
 
     def mouseReleaseEvent(self, e):
         self._drawing = False
-
+ 
+    """Canvas resize is implemented but not shown in ui, saving for if added later """
     def resize_canvas(self, new_width, new_height):
         if new_width <= 0 or new_height <= 0:
             return
@@ -131,6 +138,7 @@ class Canvas(QWidget):
         self._image = new_image
         self.update()
         
+    """Draw logic: If eraser is selected we cheat by making the eraser == background color which is always white. Otherwise we use the brush color set by the QColorDialog module."""
     def _draw(self, p1, p2):
         painter = QPainter(self._image)
 
@@ -155,7 +163,8 @@ class Canvas(QWidget):
         painter.drawImage(QPoint(0,0), self._image)
 
 
-## MAIN WINDOW
+## MAIN WINDOW 
+"""Main window which i made mostly using PyQt6 creator and copy/pasted, so code was primarily made via that for this section. Holds buttons and stuff that the other classes ask for."""
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
