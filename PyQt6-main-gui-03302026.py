@@ -2,40 +2,31 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFrame,
-    QSlider, QSpinBox, QScrollArea, QDial, QLineEdit, QSizePolicy, QLabel
+    QSlider, QSpinBox, QScrollArea, QDial, QLineEdit,
+    QSizePolicy, QLabel, QFileDialog, QColorDialog
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QPoint, QRect, Qt
+from PyQt6.QtGui import QPainter, QPen, QColor, QImage, QFont
 
 
-# SliderControl  —  labelled sliders + spinboxes
+## SLIDER CONTROL
 class SliderControl(QWidget):
     def __init__(self, label, tooltip="", min_val=0, max_val=100):
         super().__init__()
-        self.setObjectName("SliderOuter")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        inner = QWidget()
-        inner.setObjectName("SliderGroup")
-
-        row = QHBoxLayout(inner)
+        row = QHBoxLayout(self)
         row.setContentsMargins(6, 3, 6, 3)
-        row.setSpacing(6)
 
         lbl = QLabel(label)
         lbl.setFixedWidth(45)
-        lbl.setFont(QFont("Arial", 10))
 
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(min_val, max_val)
-        self.slider.setFixedWidth(110)
 
         self.spin = QSpinBox()
         self.spin.setRange(min_val, max_val)
-        self.spin.setFixedWidth(60)
         self.spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
 
-        # sync slider and spinbox to update same value
         self.slider.valueChanged.connect(self.spin.setValue)
         self.spin.valueChanged.connect(self.slider.setValue)
 
@@ -43,289 +34,249 @@ class SliderControl(QWidget):
         row.addWidget(self.slider)
         row.addWidget(self.spin)
 
-        outer_row = QHBoxLayout(self)
-        outer_row.setContentsMargins(0, 0, 0, 0)
-        outer_row.addWidget(inner)
-
         if tooltip:
             self.setToolTip(tooltip)
 
 
-# RotationControl  —  dial + degree spinbox
+## ROTATION CONTROL
 class RotationControl(QWidget):
     def __init__(self):
         super().__init__()
-        self.setToolTip("Brush rotation (0–360°)")
 
         col = QVBoxLayout(self)
-        col.setContentsMargins(0, 0, 0, 0)
-        col.setSpacing(4)
 
         self.dial = QDial()
         self.dial.setRange(0, 360)
         self.dial.setWrapping(True)
-        self.dial.setFixedSize(50, 50)
 
         self.spin = QSpinBox()
         self.spin.setRange(0, 360)
         self.spin.setSuffix("°")
-        self.spin.setFixedWidth(60)
-        self.spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
 
         self.dial.valueChanged.connect(self.spin.setValue)
         self.spin.valueChanged.connect(self.dial.setValue)
 
-        col.addWidget(self.dial, alignment=Qt.AlignmentFlag.AlignCenter)
-        col.addWidget(self.spin, alignment=Qt.AlignmentFlag.AlignCenter)
+        col.addWidget(self.dial)
+        col.addWidget(self.spin)
 
 
-# Canvas  —  drawing surface PLACEHOLDER
+## CANVAS
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
-        self.setObjectName("Canvas")
-        self.setMinimumSize(400, 400)
-        self.setToolTip("Drawing area")
+        self.setMinimumSize(1000, 800)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        self._image = QImage(self.size(), QImage.Format.Format_RGB32)
+        self._image.fill(QColor("#ffffff"))
 
-# MainWindow
+        self._drawing = False
+        self._last_point = QPoint()
+
+        self.brush_size = 10
+        self.brush_opacity = 100
+        self.brush_color = QColor("#000000")
+        self.tool = "brush"
+
+    def set_brush_size(self, v):
+        self.brush_size = max(1, v)
+
+    def set_brush_opacity(self, v):
+        self.brush_opacity = v
+
+    def set_brush_color(self, c):
+        self.brush_color = c
+
+    def set_tool(self, tool):
+        self.tool = tool
+
+    def clear(self):
+        self._image.fill(QColor("#ffffff"))
+        self.update()
+
+    def save(self, path):
+        return self._image.save(path)
+
+    def load(self, path):
+        img = QImage(path)
+        if not img.isNull():
+            self._image = img
+            self.update()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drawing = True
+            self._last_point = e.position().toPoint()
+            self._draw(self._last_point, self._last_point)
+
+    def mouseMoveEvent(self, e):
+        if self._drawing:
+            p = e.position().toPoint()
+            self._draw(self._last_point, p)
+            self._last_point = p
+
+    def mouseReleaseEvent(self, e):
+        self._drawing = False
+
+    def resize_canvas(self, new_width, new_height):
+        if new_width <= 0 or new_height <= 0:
+            return
+        new_image = QImage(new_width, new_height, QImage.Format.Format_RGB32)
+        new_image.fill(QColor("#ffffff"))
+
+        painter = QPainter(new_image)
+        painter.drawImage(QPoint(0, 0), self._image)
+        painter.end()
+
+        self._image = new_image
+        self.update()
+        
+    def _draw(self, p1, p2):
+        painter = QPainter(self._image)
+
+        if self.tool == "eraser":
+            color = QColor("#ffffff")
+            opacity = 1.0
+        else:
+            color = self.brush_color
+            opacity = self.brush_opacity / 100
+
+        painter.setOpacity(opacity)
+        painter.setPen(QPen(color, self.brush_size,
+                            Qt.PenStyle.SolidLine,
+                            Qt.PenCapStyle.RoundCap))
+
+        painter.drawLine(p1, p2)
+        painter.end()
+        self.update()
+
+    def paintEvent(self, e):
+        painter = QPainter(self)
+        painter.drawImage(QPoint(0,0), self._image)
+
+
+## MAIN WINDOW
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CSIT200 PAINT PROJECT")
-        self.resize(1200, 800)
+
+        self.setWindowTitle("Paint App")
+        self.resize(1000, 700)
 
         central = QWidget()
         self.setCentralWidget(central)
 
         root = QVBoxLayout(central)
-        root.setSpacing(0)
-        root.setContentsMargins(0, 0, 0, 0)
+
         root.addWidget(self._build_toolbar())
-        root.addWidget(self._make_separator())
         root.addLayout(self._build_content())
 
-        self._apply_styles()
+        self._connect()
 
-    # TOOLBAR
+    # ---------------------------
+    # Toolbar
+    # ---------------------------
     def _build_toolbar(self):
         bar = QWidget()
-        bar.setObjectName("Toolbar")
-
         row = QHBoxLayout(bar)
-        row.setContentsMargins(8, 4, 8, 4)
-        row.setSpacing(8)
 
-        # File actions
-        file_tips = {
-            "New":  "Create a new canvas",
-            "Load": "Open an existing file",
-            "Save": "Save the current canvas",
-        }
-        for name, tip in file_tips.items():
-            btn = QPushButton(name)
-            btn.setToolTip(tip)
-            row.addWidget(btn)
+        # File buttons
+        self.btn_new = QPushButton("New")
+        self.btn_load = QPushButton("Load")
+        self.btn_save = QPushButton("Save")
 
-        row.addSpacing(10)
+        row.addWidget(self.btn_new)
+        row.addWidget(self.btn_load)
+        row.addWidget(self.btn_save)
 
-        # History actions
-        history_tips = {
-            "Undo": "Undo the last action",
-            "Redo": "Redo the last undone action",
-        }
-        for name, tip in history_tips.items():
-            btn = QPushButton(name)
-            btn.setToolTip(tip)
-            row.addWidget(btn)
+        # Sliders
+        self.size_ctrl = SliderControl("Size")
+        self.opacity_ctrl = SliderControl("Opacity")
 
-        row.addSpacing(15)
+        row.addWidget(self.size_ctrl)
+        row.addWidget(self.opacity_ctrl)
 
-        row.addWidget(SliderControl("Size",    tooltip="Brush size (0–100)"))
-        row.addWidget(SliderControl("Opacity", tooltip="Brush opacity (0–100)"))
+        # Color
+        self.color_btn = QPushButton("Color")
+        self.hex_input = QLineEdit()
+        self.hex_input.setPlaceholderText("#HEX")
 
-        row.addSpacing(15)
-        row.addWidget(RotationControl())
-        row.addSpacing(15)
+        row.addWidget(self.color_btn)
+        row.addWidget(self.hex_input)
 
-        color_btn = QPushButton("Color")
-        color_btn.setToolTip("Open the color picker")
-        row.addWidget(color_btn)
-
-        hex_input = QLineEdit()
-        hex_input.setPlaceholderText("#HEX")
-        hex_input.setFixedWidth(80)
-        hex_input.setToolTip("Enter a hex color value")
-        row.addWidget(hex_input)
-
-        # Recent colors
-        for i in range(5):
-            swatch = QPushButton()
-            swatch.setFixedSize(22, 22)
-            swatch.setToolTip(f"Recent color {i + 1}")
-            row.addWidget(swatch)
-
-        row.addStretch()
         return bar
 
-    # Left panel - primarily brush picker
-    def _build_left_panel(self):
-        panel = QWidget()
-        panel.setObjectName("LeftPanel")
-        panel.setFixedWidth(130)
-
-        col = QVBoxLayout(panel)
-        col.setContentsMargins(5, 5, 5, 5)
-        col.setSpacing(6)
-
-        # Scrollable brush grid
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-
-        brush_grid_widget = QWidget()
-        grid = QGridLayout(brush_grid_widget)
-        grid.setSpacing(4)
-
-        for i in range(12):
-            btn = QPushButton()
-            btn.setFixedSize(40, 40)
-            btn.setToolTip(f"Brush {i + 1}")
-            grid.addWidget(btn, i // 2, i % 2)
-
-        scroll.setWidget(brush_grid_widget)
-        col.addWidget(scroll)
-
-        col.addWidget(self._make_separator(horizontal=True))
-
-        tool_tips = {
-            "Eraser": "Erase strokes",
-            "Fill":   "Flood fill a region",
-        }
-        for name, tip in tool_tips.items():
-            btn = QPushButton(name)
-            btn.setFixedHeight(36)
-            btn.setToolTip(tip)
-            col.addWidget(btn)
-
-        col.addStretch()
-        return panel
-
-    # Panel and canvas content 
+    # ---------------------------
+    # Content
+    # ---------------------------
     def _build_content(self):
         row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
 
-        canvas_col = QVBoxLayout()
-        canvas_col.setContentsMargins(10, 10, 10, 10)
-        canvas_col.addWidget(Canvas())
+        self.canvas = Canvas()
 
-        row.addWidget(self._build_left_panel(), 0)
-        row.addWidget(self._make_separator(vertical=True), 0)
-        row.addLayout(canvas_col, 1)
+        # Left panel
+        left = QVBoxLayout()
+
+        self.btn_eraser = QPushButton("Eraser")
+        self.btn_fill = QPushButton("Brush")
+
+        left.addWidget(self.btn_eraser)
+        left.addWidget(self.btn_fill)
+
+        row.addLayout(left)
+        row.addWidget(self.canvas)
 
         return row
 
-    # separators for visual separation
-    def _make_separator(self, vertical=False, horizontal=False):
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.VLine if vertical else QFrame.Shape.HLine)
-        return line
+    # ---------------------------
+    # Connections
+    # ---------------------------
+    def _connect(self):
+        # brush
+        self.size_ctrl.slider.valueChanged.connect(self.canvas.set_brush_size)
+        self.opacity_ctrl.slider.valueChanged.connect(self.canvas.set_brush_opacity)
+
+        # tools
+        self.btn_eraser.clicked.connect(lambda: self.canvas.set_tool("eraser"))
+        self.btn_fill.clicked.connect(lambda: self.canvas.set_tool("brush"))
+
+        # file
+        self.btn_new.clicked.connect(self.canvas.clear)
+        self.btn_save.clicked.connect(self.save_file)
+        self.btn_load.clicked.connect(self.load_file)
+
+        # color
+        self.color_btn.clicked.connect(self.pick_color)
+        self.hex_input.returnPressed.connect(self.set_hex)
+
+    # ---------------------------
+    # Actions
+    # ---------------------------
+    def pick_color(self):
+        c = QColorDialog.getColor()
+        if c.isValid():
+            self.canvas.set_brush_color(c)
+            self.hex_input.setText(c.name())
+
+    def set_hex(self):
+        c = QColor(self.hex_input.text())
+        if c.isValid():
+            self.canvas.set_brush_color(c)
+
+    def save_file(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save", "", "PNG (*.png)")
+        if path:
+            self.canvas.save(path)
+
+    def load_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Open", "", "Images (*.png *.jpg)")
+        if path:
+            self.canvas.load(path)
 
 
-
-
-
-
-
-    # STYLESHEET FOR COLORING DO NOT REMOVE
-    def _apply_styles(self):
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #d0d0d0;
-                color: #111;
-                font-size: 12px;
-            }
-
-            QWidget#Toolbar {
-                background-color: #bcbcbc;
-                border-bottom: 2px solid #888;
-            }
-
-            QWidget#LeftPanel {
-                background-color: #c6c6c6;
-                border-right: 1px solid #888;
-            }
-
-            QWidget#Canvas {
-                background-color: #ffffff;
-                border: 2px solid #222;
-            }
-
-            QWidget#SliderOuter {
-                background-color: #b0b0b0;
-            }
-
-            QWidget#SliderGroup {
-                background-color: #b0b0b0;
-                border: 1px solid #888;
-                border-radius: 4px;
-            }
-
-            QWidget#SliderGroup QLabel {
-                color: #111;
-            }
-
-            QPushButton {
-                background-color: #a8a8a8;
-                border: 1px solid #666;
-                padding: 4px;
-            }
-
-            QPushButton:hover {
-                background-color: #969696;
-            }
-
-            QPushButton:pressed {
-                background-color: #7f7f7f;
-            }
-
-            QLineEdit, QSpinBox {
-                background-color: #ffffff;
-                border: 1px solid #666;
-                padding: 2px;
-                color: #000;
-            }
-
-            QSlider::groove:horizontal {
-                background: #999;
-                height: 6px;
-            }
-
-            QSlider::handle:horizontal {
-                background: #333;
-                width: 10px;
-                margin: -4px 0;
-            }
-
-            QFrame {
-                background-color: #777;
-            }
-
-            QToolTip {
-                background-color: #333;
-                color: #f0f0f0;
-                border: 1px solid #555;
-                padding: 4px;
-                border-radius: 3px;
-                font-size: 11px;
-            }
-        """)
-
-
-#Main function 
+## MAIN // RUN
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
+    win = MainWindow()
+    win.show()
     sys.exit(app.exec())
