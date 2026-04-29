@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtGui import QPainter, QPen, QColor, QImage
 
+## SLIDER CONTROL
+"""We use this for opacity and size sliders."""
 class SliderControl(QWidget):
     def __init__(self, label, min_val=0, max_val=100):
         super().__init__()
@@ -25,6 +27,28 @@ class SliderControl(QWidget):
         row.addWidget(self.slider)
         row.addWidget(self.spin)
 
+
+## ROTATION CONTROL
+"""Would be used for rotation widget but it is not implemented currently."""
+class RotationControl(QWidget):
+    def __init__(self):
+        super().__init__()
+        col = QVBoxLayout(self)
+        self.dial = QDial()
+        self.dial.setRange(0, 360)
+        self.dial.setWrapping(True)
+        self.spin = QSpinBox()
+        self.spin.setRange(0, 360)
+        self.spin.setSuffix("°")
+        self.dial.valueChanged.connect(self.spin.setValue)
+        self.spin.valueChanged.connect(self.dial.setValue)
+        col.addWidget(self.dial)
+        col.addWidget(self.spin)
+
+
+## CANVAS
+"""Canvas is set to minimum size as declared below. Sets brush size, opacity, color, tool to default 
+and clears when making new. Implements save/load as well. Also handles undo/redo via history stack."""
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
@@ -69,6 +93,10 @@ class Canvas(QWidget):
             self._save_snapshot()
             self.update()
 
+    """History stack for undo/redo. We save a snapshot of the canvas after every stroke.
+    Undo decrements the index and restores that snapshot.
+    Redo increments the index and restores that snapshot.
+    Any new stroke after an undo clears the redo history."""
     def _save_snapshot(self):
         self.history = self.history[:self.history_index + 1]
         self.history.append(self._image.copy())
@@ -86,6 +114,9 @@ class Canvas(QWidget):
             self._image = self.history[self.history_index].copy()
             self.update()
 
+    """The way we make our canvas update is by tracking when the left mouse button is held or not held. 
+    When MouseLeft is clicked, we make the self._drawing method true, which then checks the position 
+    of the mouse cursor and draws objects continuously until the left mouse button is released."""
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             self._drawing = True
@@ -99,9 +130,24 @@ class Canvas(QWidget):
             self._last_point = p
 
     def mouseReleaseEvent(self, e):
+        """On release we save a snapshot so undo can restore the state before this stroke."""
         self._drawing = False
         self._save_snapshot()
 
+    """Canvas resize is implemented but not shown in UI, saving for if added later."""
+    def resize_canvas(self, new_width, new_height):
+        if new_width <= 0 or new_height <= 0:
+            return
+        new_image = QImage(new_width, new_height, QImage.Format.Format_RGB32)
+        new_image.fill(QColor("#ffffff"))
+        painter = QPainter(new_image)
+        painter.drawImage(QPoint(0, 0), self._image)
+        painter.end()
+        self._image = new_image
+        self.update()
+
+    """Draw logic: If eraser is selected we cheat by making the eraser == background color which is 
+    always white. Otherwise we use the brush color set by the QColorDialog module or hex input."""
     def _draw(self, p1, p2):
         painter = QPainter(self._image)
         if self.tool == "eraser":
@@ -122,6 +168,10 @@ class Canvas(QWidget):
         painter = QPainter(self)
         painter.drawImage(QPoint(0, 0), self._image)
 
+
+## MAIN WINDOW
+"""Main window that holds all other components. Builds the toolbar, left panel, and canvas.
+Also handles color picking, hex input, recent colors swatches, and file operations."""
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -136,6 +186,8 @@ class MainWindow(QMainWindow):
         self._connect()
 
     def _build_toolbar(self):
+        """Builds the top toolbar with file buttons, undo/redo, sliders, 
+        color picker, hex input, and recent color swatches."""
         bar = QWidget()
         row = QHBoxLayout(bar)
         self.btn_new = QPushButton("New")
@@ -159,6 +211,8 @@ class MainWindow(QMainWindow):
         self.hex_input.setPlaceholderText("#HEX")
         row.addWidget(self.color_btn)
         row.addWidget(self.hex_input)
+        """Recent colors: stores last 5 used colors as clickable swatches.
+        Clicking a swatch restores that color as the active brush color."""
         self.swatches = []
         for i in range(5):
             swatch = QPushButton()
@@ -168,6 +222,7 @@ class MainWindow(QMainWindow):
         return bar
 
     def _build_content(self):
+        """Builds the main content area with the left tool panel and canvas."""
         row = QHBoxLayout()
         self.canvas = Canvas()
         left = QVBoxLayout()
@@ -181,6 +236,7 @@ class MainWindow(QMainWindow):
         return row
 
     def _connect(self):
+        """Connects all buttons, sliders, and inputs to their respective canvas methods."""
         self.size_ctrl.slider.valueChanged.connect(self.canvas.set_brush_size)
         self.opacity_ctrl.slider.valueChanged.connect(self.canvas.set_brush_opacity)
         self.btn_eraser.clicked.connect(lambda: self.canvas.set_tool("eraser"))
@@ -194,6 +250,8 @@ class MainWindow(QMainWindow):
         self.hex_input.returnPressed.connect(self.set_hex)
 
     def pick_color(self):
+        """Opens PyQt6 QColorDialog for color selection. Updates brush color,
+        hex input field, and adds to recent colors."""
         c = QColorDialog.getColor()
         if c.isValid():
             self.canvas.set_brush_color(c)
@@ -201,12 +259,15 @@ class MainWindow(QMainWindow):
             self.add_recent_color(c)
 
     def set_hex(self):
+        """Parses hex input on Enter key press and updates brush color if valid."""
         c = QColor(self.hex_input.text())
         if c.isValid():
             self.canvas.set_brush_color(c)
             self.add_recent_color(c)
 
     def add_recent_color(self, color):
+        """Adds a color to the recent colors list. Max 5 colors stored.
+        Removes duplicates and updates swatch button backgrounds."""
         self.recent_colors = [c for c in self.recent_colors if c.name() != color.name()]
         self.recent_colors.insert(0, color)
         self.recent_colors = self.recent_colors[:5]
@@ -217,19 +278,24 @@ class MainWindow(QMainWindow):
                 swatch.clicked.connect(lambda _, col=self.recent_colors[i]: self._set_color_from_swatch(col))
 
     def _set_color_from_swatch(self, color):
+        """Restores a color from a recent swatch and updates the hex input field."""
         self.canvas.set_brush_color(color)
         self.hex_input.setText(color.name())
 
     def save_file(self):
+        """Opens a save dialog and writes the canvas image to a PNG file."""
         path, _ = QFileDialog.getSaveFileName(self, "Save", "", "PNG (*.png)")
         if path:
             self.canvas.save(path)
 
     def load_file(self):
+        """Opens a load dialog and replaces the canvas with the selected PNG or JPG."""
         path, _ = QFileDialog.getOpenFileName(self, "Open", "", "Images (*.png *.jpg)")
         if path:
             self.canvas.load(path)
 
+
+## MAIN // RUN
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     win = MainWindow()
